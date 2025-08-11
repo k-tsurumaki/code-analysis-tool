@@ -7,7 +7,9 @@ import (
 	"go/ast"
 	"go/token"
 	"os"
+	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
@@ -27,14 +29,17 @@ type Issue struct {
 }
 
 func AnalyzeFunction(ctx context.Context, path string, fset *token.FileSet, fn *ast.FuncDecl, issues []Issue, task string) (*AIAnalysis, error) {
-	model := getenvDefault("OLLAMA_MODEL", "llama3.1:8b")
+	model := getenvDefault("OLLAMA_MODEL", "gpt-oss:20b")
 	client, err := ollama.New(ollama.WithModel(model))
 	if err != nil {
 		return nil, err
 	}
 
 	code := extractFuncSource(path, fset, fn)
-	prompt := buildPrompt(code, issues, task)
+	prompt, err := buildPromptFromFile(code, issues, task)
+	if err != nil {
+		return nil, err
+	}
 
 	out, err := llms.GenerateFromSinglePrompt(ctx, client, prompt, llms.WithTemperature(0.2))
 	if err != nil {
@@ -49,24 +54,30 @@ func AnalyzeFunction(ctx context.Context, path string, fset *token.FileSet, fn *
 	return &parsed, nil
 }
 
-func buildPrompt(code string, issues []Issue, task string) string {
-	b := &strings.Builder{}
-	fmt.Fprintln(b, "You are a senior Go engineer. Analyze the following function and provide:")
-	fmt.Fprintln(b, "- a one-line GoDoc comment if missing")
-	fmt.Fprintln(b, "- variable rename suggestions (concise)")
-	fmt.Fprintln(b, "- a brief human-readable summary")
-	fmt.Fprintln(b, "- concrete improvements for detected anti-patterns")
-	fmt.Fprintln(b, "Task:", task)
-	fmt.Fprintln(b, "Known issues:")
-	for _, is := range issues {
-		fmt.Fprintf(b, "- %s: %s\n", is.Kind, is.Message)
+type promptData struct {
+	Code   string
+	Issues []Issue
+	Task   string
+}
+
+func buildPromptFromFile(code string, issues []Issue, task string) (string, error) {
+	// prompt.txtは実行バイナリのカレントディレクトリ or このファイルの親ディレクトリにある想定
+	promptPath := filepath.Join("prompt.txt")
+	bs, err := os.ReadFile(promptPath)
+	if err != nil {
+		return "", fmt.Errorf("prompt.txtの読み込みに失敗: %w", err)
 	}
-	fmt.Fprintln(b, "\nGo function:")
-	fmt.Fprintln(b, "```go")
-	fmt.Fprintln(b, code)
-	fmt.Fprintln(b, "```")
-	fmt.Fprintln(b, "\nRespond ONLY valid JSON with keys: summary, comment_suggestion, better_var_names (array), improvements (array). No markdown, no extra text.")
-	return b.String()
+	tmpl, err := template.New("prompt").Parse(string(bs))
+	if err != nil {
+		return "", fmt.Errorf("prompt.txtのテンプレートパースに失敗: %w", err)
+	}
+	var b strings.Builder
+	data := promptData{Code: code, Issues: issues, Task: task}
+	err = tmpl.Execute(&b, data)
+	if err != nil {
+		return "", fmt.Errorf("promptテンプレートの埋め込みに失敗: %w", err)
+	}
+	return b.String(), nil
 }
 
 func extractFuncSource(path string, fset *token.FileSet, fn *ast.FuncDecl) string {

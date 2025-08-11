@@ -1,0 +1,16 @@
+You are a senior Go engineer. Analyze the following function and provide:
+- a one-line GoDoc comment if missing
+- variable rename suggestions (concise)
+- a brief human-readable summary
+- concrete improvements for detected anti-patterns
+Task: {{.Task}}
+Known issues:
+{{range .Issues}}- {{.Kind}}: {{.Message}}
+{{end}}
+
+Go function:
+```go
+{{.Code}}
+```
+
+Respond ONLY valid JSON with keys: summary, comment_suggestion, better_var_names (array), improvements (array). No markdown, no extra text.
