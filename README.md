@@ -2,14 +2,12 @@
 
 ## 概要
 
-本ツールはGo言語のソースコードに対し、静的解析（ASTベース）とローカルLLM（Ollama + CodeLlama等）を組み合わせて、コメント不足検出・変数名リファクタ提案・要約生成・アンチパターン指摘などを自動で行うCLIツールです。新人・上級開発者問わず、コードレビューやドキュメント整備の効率化を支援します。
+本ツールはGo言語のソースコードに対し、静的解析（ASTベース）とローカルLLM（Ollama等）を組み合わせて、Goらしいコーディングルールやプロジェクト独自のコーディング規約違反を自動で指摘し、改善案を提案するCLIツールです。新人・上級開発者問わず、ルール遵守の徹底やレビュー効率化を支援します。
 
 ## 主な機能
 
-- GoDocコメント不足関数の検出
-- 5つ以上のパラメータを持つ関数の抽出
-- 未使用変数・error未処理の簡易検出
-- LLMによるコメント自動生成、変数名リファクタ提案、要約、改善アドバイス
+- GoDocコメント不足、パラメータ数超過、未使用変数、error未処理などの静的解析
+- LLMによるコーディング規約違反の自動指摘と改善案の提案
 - CLIでファイル/ディレクトリ/関数単位で解析・出力
 - 出力形式: pretty(標準出力)/json
 
@@ -23,7 +21,7 @@
    go get github.com/tmc/langchaingo@latest
    go mod tidy
    ```
-4. ビルド（`-o`はビルド後に生成される実行ファイル名を指定）
+4. ビルド
    ```sh
    go build -o gocodeai
    ```
@@ -31,13 +29,12 @@
 ## 使い方
 
 ```sh
-./gocodeai analyze --file=main.go --task=comment_suggestion
+./gocodeai analyze --file=main.go --output=pretty
 ```
 
 主なオプション:
 - `--file` または `--dir`: 解析対象ファイル/ディレクトリ
 - `--func`: 関数名指定（任意）
-- `--task`: comment_suggestion|refactor|summary|anti_pattern|all
 - `--output`: pretty|json
 - `--ai=false`: AI提案を無効化
 
@@ -45,12 +42,26 @@
 
 ```sh
 ./gocodeai analyze --file=main.go --output=pretty
-./gocodeai analyze --dir=./internal --task=all --output=json
+./gocodeai analyze --dir=./internal --output=json
+```
+
+## 出力例（pretty）
+
+```
+== sample.go processData ==
+- [missing_comment] sample.go:10:1: GoDocコメントがありません
+- [too_many_params] sample.go:10:1: パラメータが多い: 5
+-- コーディング規約違反 --
+  - パラメータ数が4つを超えています
+  - 変数名が曖昧です: data, result
+-- 改善案 --
+  - パラメータを構造体にまとめてください
+  - 変数名をより意味のあるものに変更してください
 ```
 
 ## 制約・注意事項
 
-- LLM（Ollama/CodeLlama等）がローカルで動作する環境が必要です
+- LLM（Ollama等）がローカルで動作する環境が必要です
 - 大規模・複雑なプロジェクトや特殊な構文には未対応の場合があります
 - LLMの出力内容は必ずしも正確・安全とは限りません（プロンプト注入等に注意）
 - 初期リリースでは自動修正やWeb連携等は未実装

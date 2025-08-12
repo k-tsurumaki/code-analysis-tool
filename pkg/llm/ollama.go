@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -15,21 +14,21 @@ import (
 	"github.com/tmc/langchaingo/llms/ollama"
 )
 
+// AIAnalysis はAIによる自然言語の解析結果を格納する構造体です。
 type AIAnalysis struct {
-	Summary           string   `json:"summary,omitempty"`
-	CommentSuggestion string   `json:"comment_suggestion,omitempty"`
-	BetterVarNames    []string `json:"better_var_names,omitempty"`
-	Improvements      []string `json:"improvements,omitempty"`
+	Output string
 }
 
+// Issue は静的解析で検出した問題点を表します。
 type Issue struct {
 	Kind    string `json:"kind"`
 	Pos     string `json:"pos"`
 	Message string `json:"message"`
 }
 
+// AnalyzeFunction は指定したGo関数に対し、AIによるコーディング規約違反の指摘と改善案を取得します。
 func AnalyzeFunction(ctx context.Context, path string, fset *token.FileSet, fn *ast.FuncDecl, issues []Issue, task string) (*AIAnalysis, error) {
-	model := getenvDefault("OLLAMA_MODEL", "gpt-oss:20b")
+	model := getenvDefault("OLLAMA_MODEL", "mistral")
 	client, err := ollama.New(ollama.WithModel(model))
 	if err != nil {
 		return nil, err
@@ -46,12 +45,7 @@ func AnalyzeFunction(ctx context.Context, path string, fset *token.FileSet, fn *
 		return nil, err
 	}
 
-	parsed, ok := parseResponse(out)
-	if !ok {
-		// Return minimal parsed content instead of failing hard
-		return &AIAnalysis{Summary: truncate(out, 300)}, nil
-	}
-	return &parsed, nil
+	return &AIAnalysis{Output: strings.TrimSpace(out)}, nil
 }
 
 type promptData struct {
@@ -60,8 +54,8 @@ type promptData struct {
 	Task   string
 }
 
+// buildPromptFromFile はprompt.txtテンプレートを読み込み、Goコード・指摘事項・タスク内容を埋め込んだプロンプト文を生成します。
 func buildPromptFromFile(code string, issues []Issue, task string) (string, error) {
-	// prompt.txtは実行バイナリのカレントディレクトリ or このファイルの親ディレクトリにある想定
 	promptPath := filepath.Join("prompt.txt")
 	bs, err := os.ReadFile(promptPath)
 	if err != nil {
@@ -80,6 +74,7 @@ func buildPromptFromFile(code string, issues []Issue, task string) (string, erro
 	return b.String(), nil
 }
 
+// extractFuncSource は指定した関数のソースコード部分のみをファイルから抽出します。
 func extractFuncSource(path string, fset *token.FileSet, fn *ast.FuncDecl) string {
 	start := fset.Position(fn.Pos()).Offset
 	end := fset.Position(fn.End()).Offset
@@ -90,34 +85,7 @@ func extractFuncSource(path string, fset *token.FileSet, fn *ast.FuncDecl) strin
 	return string(bs[start:end])
 }
 
-func parseResponse(text string) (AIAnalysis, bool) {
-	// Try to locate JSON blob if wrapped in fences
-	s := strings.TrimSpace(text)
-	if strings.HasPrefix(s, "```") {
-		// strip first fence line and last fence if present
-		lines := strings.Split(s, "\n")
-		if len(lines) >= 2 {
-			lines = lines[1:]
-			if strings.HasPrefix(strings.TrimSpace(lines[len(lines)-1]), "```") {
-				lines = lines[:len(lines)-1]
-			}
-			s = strings.Join(lines, "\n")
-		}
-	}
-	var res AIAnalysis
-	if err := json.Unmarshal([]byte(s), &res); err != nil {
-		return AIAnalysis{}, false
-	}
-	return res, true
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
-}
-
+// getenvDefault は環境変数kの値を取得し、未設定ならデフォルト値dを返します。
 func getenvDefault(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
