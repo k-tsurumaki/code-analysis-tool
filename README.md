@@ -23,7 +23,7 @@
    go get github.com/tmc/langchaingo@latest
    go mod tidy
    ```
-4. ビルド
+4. ビルド（`-o`はビルド後に生成される実行ファイル名を指定）
    ```sh
    go build -o gocodeai
    ```
