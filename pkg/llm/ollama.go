@@ -29,6 +29,7 @@ type Issue struct {
 // AnalyzeFunction は指定したGo関数に対し、AIによるコーディング規約違反の指摘と改善案を取得します。
 func AnalyzeFunction(ctx context.Context, path string, fset *token.FileSet, fn *ast.FuncDecl, issues []Issue, task string) (*AIAnalysis, error) {
 	model := getenvDefault("OLLAMA_MODEL", "mistral")
+	// model := getenvDefault("OLLAMA_MODEL", "gpt-oss:20b")
 	client, err := ollama.New(ollama.WithModel(model))
 	if err != nil {
 		return nil, err
