@@ -228,7 +228,7 @@ func analyzeFile(ctx context.Context, path string, opt *analyzeOptions) ([]Analy
 				}
 			}
 			// ai, err := llm.AnalyzeFunctionOllama(ctx, path, fset, fn, llmIssues, opt.Task)
-			ai, err := llm.AnalyzeFunctionGemini(ctx, path, fset, fn, llmIssues, opt.Task)
+			ai, err := llm.AnalyzeFunctionAzureOpenAI(ctx, path, fset, fn, llmIssues, opt.Task)
 			if err != nil {
 				res.Issues = append(res.Issues, Issue{Kind: "ai_error", Pos: "-", Message: err.Error()})
 			} else if ai != nil {
